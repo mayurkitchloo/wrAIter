@@ -45,8 +45,11 @@ const generateOutline = async ( req, res ) => {
         Generate the outline now: `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+            }
         });
 
         const text = response.text;
@@ -86,14 +89,22 @@ const generateOutline = async ( req, res ) => {
 // @access private
 const generateChapterContent = async ( req, res ) => {
     try{
-        const { chapterTitle, chapterDescription, style } = req.body;
+        const { chapterTitle, chapterDescription, style, bookTitle, bookSubtitle, previousChaptersContext } = req.body;
         if(!chapterTitle){
             return res.status(400).json({message: "Chapter title is required"});
         }
-        const prompt = `You are an expert writer specializing in ${style} content. Write a complete chapter for a book with the following specifications:
+        
+        const prompt = `You are an expert writer specializing in ${style} content. Write a complete chapter for a book.
+        
+        Book Context:
+        Title: "${bookTitle || 'Untitled Book'}"
+        ${bookSubtitle ? `Subtitle: "${bookSubtitle}"` : ''}
 
-        Chapter Title: "${chapterTitle}"
-        ${chapterDescription ? `Chapter Description: ${chapterDescription}` : ''}
+        ${previousChaptersContext ? `Previous Chapters Summary:\n${previousChaptersContext}\n` : ''}
+
+        Current Chapter Specifications:
+        Title: "${chapterTitle}"
+        ${chapterDescription ? `Description: ${chapterDescription}` : 'Description: (None provided. Please generate a suitable description based on the book context.)'}
         Writing Style: ${style}
         Target Length: Comprehensive and detailed (aim for 1500-2500 words)
 
@@ -101,24 +112,56 @@ const generateChapterContent = async ( req, res ) => {
         1. Write in a ${style.toLowerCase()} tone throughout the chapter
         2. Structure the content with clear sections and smooth transitions
         3. Include relevant examples, explanations, or anecdotes as appropriate for the style
-        4. Ensure the content flows logically from introduction to conclusion
+        4. Ensure the content flows logically from the previous chapters and builds upon them
         5. Make the content engaging and valuable to readers
-        ${chapterDescription ? '6. Cover all points mentioned in the chapter description' : ''}
+        
+        Output Format:
+        Return ONLY a valid JSON object with exactly two keys: "description" and "content".
+        - "description": A 2-3 sentence summary of what this chapter covers (generate one if it wasn't provided).
+        - "content": The complete chapter text using markdown formatting (use ## for subheadings, ** for bold, etc).
 
-        Format Guidelines:
-        - Start with a compelling opening paragraph
-        - Use clear paragraph breaks for readability
-        - Include subheadings if appropriate for the content length
-        - End with a strong conclusion or transition to the next chapter
-        - Write in plain text without markdown formatting
-
-        Begin writing the chapter content now:`;
+        Example structure:
+        {
+            "description": "In this chapter, we explore...",
+            "content": "## Introduction\\n\\nThe fundamental principles of..."
+        }
+        
+        Begin generating the JSON response now:`;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+            }
         });
-        res.status(200).json({content: response.text});
+
+        let text = response.text;
+        
+        // Find and extract JSON from the response text
+        const startIndex = text.indexOf("{");
+        const endIndex = text.lastIndexOf("}");
+
+        if (startIndex === -1 || endIndex === -1) {
+            console.error("Could not find JSON object in AI response:", text);
+            // Fallback: If AI didn't return JSON, just return the raw text as content
+            return res.status(200).json({ content: text });
+        }
+
+        const jsonString = text.substring(startIndex, endIndex + 1);
+
+        try {
+            // escape backslashes and newlines just in case
+            const result = JSON.parse(jsonString);
+            res.status(200).json({
+                description: result.description,
+                content: result.content
+            });
+        } catch (e) {
+            console.error("Failed to parse AI response:", jsonString);
+            // Fallback to raw text
+            res.status(200).json({ content: text });
+        }
     }
     catch(error){
         console.error("Error generating chapter content:", error);

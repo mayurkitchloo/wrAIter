@@ -180,6 +180,14 @@ const EditorPage = () => {
         setBook(updated);
     };
 
+    const updateChapterDescription = (description) => {
+        if (!book) return;
+        const updated = { ...book };
+        updated.chapters = [...updated.chapters];
+        updated.chapters[activeChapter] = { ...updated.chapters[activeChapter], description };
+        setBook(updated);
+    };
+
     const addChapter = () => {
         if (!book) return;
         const newChapter = { title: `Chapter ${book.chapters.length + 1}`, description: '', content: '' };
@@ -246,15 +254,28 @@ const EditorPage = () => {
         const chapter = book.chapters[activeChapter];
         setGenerating(true);
         try {
+            const previousChapters = book.chapters
+                .slice(0, activeChapter)
+                .map((ch, i) => `Chapter ${i + 1}: ${ch.title}\nDescription: ${ch.description || 'None'}`);
+
             const res = await axiosInstance.post(API_PATHS.AI.GENERATE_CHAPTER_CONTENT, {
                 chapterTitle: chapter.title,
                 chapterDescription: chapter.description,
                 style: 'Professional',
+                bookTitle: book.title,
+                bookSubtitle: book.subtitle,
+                previousChaptersContext: previousChapters.join('\n\n')
             });
-            updateChapterContent(res.data.content);
-            toast.success('Content generated!');
+            
+            if(res.data.description) {
+                updateChapterDescription(res.data.description);
+            }
+            if(res.data.content) {
+                updateChapterContent(res.data.content);
+            }
+            toast.success('Chapter generated successfully!');
         } catch (error) {
-            toast.error('Failed to generate content');
+            toast.error('Failed to generate chapter');
         } finally {
             setGenerating(false);
         }
@@ -455,6 +476,17 @@ const EditorPage = () => {
                                 >
                                     Generate
                                 </Button>
+                            </div>
+
+                            {/* Chapter Description */}
+                            <div className="mb-4">
+                                <TextareaField
+                                    id="chapter-description"
+                                    placeholder="Brief description of what happens in this chapter..."
+                                    value={currentChapter?.description || ''}
+                                    onChange={(e) => updateChapterDescription(e.target.value)}
+                                    rows={2}
+                                />
                             </div>
 
                             {/* Markdown editor - no chapter heading injected */}
