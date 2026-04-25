@@ -14,14 +14,12 @@ const app = express();
 
 //Middleware to handle CORS
 app.use(
-    cors(
-        {
-            origin: "*",
-            methods: ["GET", "POST", "PUT", "DELETE"],
-            allowedHeaders: ["Content-Type", "Authorization"]
-            credentials: true
-        }
-    )
+    cors({
+        origin: "https://wraiter.vercel.app", // ← your actual frontend URL
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        allowedHeaders: ["Content-Type", "Authorization"],  // ← added comma here
+        credentials: true
+    })
 );
 
 app.options("*", cors());
