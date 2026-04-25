@@ -19,9 +19,12 @@ app.use(
             origin: "*",
             methods: ["GET", "POST", "PUT", "DELETE"],
             allowedHeaders: ["Content-Type", "Authorization"]
+            credentials: true
         }
     )
 );
+
+app.options("*", cors());
 
 //middleware
 app.use(express.json());
